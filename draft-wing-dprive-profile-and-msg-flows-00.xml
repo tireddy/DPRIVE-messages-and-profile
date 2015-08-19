@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes" ?>
+<?rfc colonspace='yes' ?>
+<?rfc tocindent='yes' ?>
+<?rfc authorship='yes' ?>
+<rfc category="std" docName="draft-wing-dprive-profile-and-msg-flows-00"
+     ipr="trust200902">
+  <front>
+    <title abbrev="DPRIVE TLS/DTLS Profile and Message Flows">DPRIVE TLS/DTLS
+    Profile and Message Flows</title>
+
+    <author fullname="Dan Wing" initials="D." surname="Wing">
+      <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+
+      <address>
+        <postal>
+          <street>170 West Tasman Drive</street>
+
+          <city>San Jose</city>
+
+          <region>California</region>
+
+          <code>95134</code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>dwing@cisco.com</email>
+      </address>
+    </author>
+
+    <author fullname="Tirumaleswar Reddy" initials="T." surname="Reddy">
+      <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+
+      <address>
+        <email>tireddy@cisco.com</email>
+      </address>
+    </author>
+
+    <date />
+
+    <workgroup>DPRIVE Working Group</workgroup>
+
+    <abstract>
+      <t>This document defines a Transport Layer Security (TLS) and Datagram
+      TLS (DTLS) 1.2 profile for providing DNS privacy. The message flows for
+      DNS-over-TLS and DNS-over-DTLS are also discussed and compared.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>The DPRIVE working group has two active documents that provide DNS
+      confidentiality, DNS over DTLS <xref
+      target="I-D.ietf-dprive-dnsodtls"></xref> and DNS over TLS <xref
+      target="I-D.ietf-dprive-start-tls-for-dns"></xref>. </t>
+
+      <t>This document defines a profile of DTLS 1.2 <xref
+      target="RFC6347"></xref>and TLS 1.2 <xref target="RFC5246 "></xref> that
+      offers DNS privacy. Profile thereby means that available configuration
+      options and protocol extensions are utilized to best support DNS
+      privacy. This document also shows message flows for those two
+      documents.</t>
+    </section>
+
+    <section title="(D)TLS Profile">
+      <t>It is expected that both DNS over DTLS and DNS over TLS will take
+      advantage of <list style="symbols">
+          <t><xref target="RFC5077">TLS session resumption without server-side
+          state</xref>, which eliminates the need for the server to retain
+          cryptographic state for longer than necessary, and;</t>
+
+          <t><xref target="I-D.ietf-tls-falsestart">TLS False Start</xref>,
+          which reduces round-trips by allowing the TLS second flight of
+          messages (ChangeCipherSpec) to also contain the (encrypted) DNS
+          query, and;</t>
+
+          <t><xref target="I-D.ietf-tls-cached-info">Cached Information
+          Extension</xref>, which avoids transmitting the server's certificate
+          and certificate chain if the client has cached that information from
+          a previous TLS handshake, and;</t>
+
+          <t><xref target="RFC7250">Raw public keys</xref>, which reduce the
+          size of the ServerHello, and don't have to pay the price of
+          certificates and public key infrastructure (PKI).</t>
+
+          <t><xref target="RFC6066"></xref> extension lowers the maximum
+          fragment length support needed for the Record Layer from 2^14 bytes
+          to 2^9 bytes. This extension allows the DNS client to indicate to
+          the DNS server how much the input that the record layer may process
+          without fragmentation (that is, the maximum value of
+          TLSPlaintext.length; see <xref target="RFC5246"></xref>, Section
+          6.2.1). </t>
+
+          <t>Profiled TLS 1.2 (but quickly move to support <xref
+          target="I-D.ietf-tls-tls13">TLS 1.3</xref> which reduces round
+          trips).</t>
+        </list></t>
+
+      <section title="DTLS">
+        <t>With DTLS, the client is immediately informed of the server state
+        loss with a DTLS Alert, as shown in the diagram below. This costs one
+        round trip.</t>
+
+        <figure anchor="fig_server_state_loss_dtls"
+                title="Server State Loss, DTLS">
+          <artwork align="center"><![CDATA[
+ client                                          server
+    |                                               |              
+    |<-----------DPRIVE communications------------->|
+    |                                               |
+    |                   ...                         |
+    |                                               |
+    |                                        (state lost)
+    |                                               |
+ 1. |-----------DPRIVE query----------------------->|
+ 2. |<----------DTLS Alert--------------------------|
+ 3. |-DLTS ClientHello w/resumption---------------->|
+    |                   ...                         |
+]]></artwork>
+        </figure>
+
+        <t>An optimization of the above flow is possible, if we consider that
+        the server is more likely to have lost state if the most recent DNS
+        query was sent a "long time ago" (exact value of "long time" is
+        debatable). In that situation, the DNS-over-DTLS client can send a TLS
+        handshake with TLS resumption -- effectively, it sends the TLS
+        handshake identical to packet (3) of <xref
+        target="fig_server_state_loss_dtls"></xref> (avoiding packets 1 and
+        2). This packet is larger, though, as it contains the TLS session
+        resumption information. Thus, it is a trade-off of a larger message
+        versus a (possible) round trip savings. This message flow is shown
+        below.</t>
+
+        <figure anchor="fig_server_state_loss_dtls_false"
+                title="Server State Loss, DTLS False Start">
+          <artwork align="center"><![CDATA[
+client                                              server
+   |                                                   |              
+   |<----------DPRIVE communications------------------>|
+   |                                                   |
+   |                   ...                             |
+   |                                                   |
+   |                                             (state lost)
+   |                                                   |
+   |--DTLS ClientHello w/resumption ------------------>|
+   |<-DTLS ServerHello, ChangeCipherSpec, Finished-----|
+   |--DTLS ChangeCipherSpec, Finished, DNS query------>|
+   |<-DNS response-------------------------------------|
+   |                   ...                             |  
+]]></artwork>
+        </figure>
+      </section>
+
+      <section title="TLS">
+        <t>With TLS, the client is immediately informed of server state loss
+        with a TCP RST, as shown in the diagram below. This costs one round
+        trip.</t>
+
+        <figure anchor="fig_server_state_loss_tls"
+                title="Server State Loss, TLS">
+          <artwork align="center"><![CDATA[
+client                                                    server
+   |                                                         |
+   |<-----------------DPRIVE communications----------------->|
+   |                                                         |
+   |                         ...                             |
+   |                                                         |
+   |                                                  (state lost)
+   |                                                         |
+   |-DNS-over-TLS------------------------------------------->|
+   |<------TCP RST-------------------------------------------|
+   |--TCP SYN----------------------------------------------->|
+   |<-TCP SYNACK---------------------------------------------|
+   |--TCP ACK, TLS ClientHello w/Resumption ---------------->|
+   |<-TLS ServerHello, ChangeCipherSpec, Finished -----------|
+   |--TLS ChangeCipherSpec, Finished, DNS query------------->|
+   |<-DNS response-------------------------------------------|
+   |                                                         |
+]]></artwork>
+        </figure>
+
+        <t>Unlike DTLS, this round trip is unavoidable.</t>
+
+        <t><list style="empty">
+            <t>Open Issue: Does TCP RST cause one second delay on Windows, or
+            was this just behavior on Windows Vista and XP during session
+            establishment (see slide 11 of <xref target="RST-delay"></xref>)?
+            Needs testing.</t>
+          </list></t>
+
+        <t>If the client and server TCP stacks both support <xref
+        target="RFC7413">TCP Fast Open (TFO)</xref>, the TCP 3-way handshake
+        can be done without a round trip, as shown below. Currently, TFO is
+        supported in Linux 3.7 (TCP client and server), iOS 9, and OS X
+        10.11.</t>
+
+        <figure anchor="fig_server_state_loss_tls_fastopen"
+                title="Server State Loss, TLS with TCP FastOpen">
+          <artwork align="center"><![CDATA[
+client                                                         server
+   |                                                              |
+   |<-------------------DPRIVE communications-------------------->|
+   |                                                              |
+   |                         ...                                  |
+   |                                                              |
+   |                                                     (state lost)
+   |                                                              |
+   |-DNS-over-TLS------------------------------------------------>|
+   |<------TCP RST------------------------------------------------|
+   |--TCP SYN, TLS ClientHello w/Resumption --------------------->|
+   |<-TCP SYNACK, TLS ServerHello, ChangeCipherSpec, Finished-----|
+   |--TLS ChangeCipherSpec, Finished, DNS query------------------>|
+   |<-DNS response------------------------------------------------|
+]]></artwork>
+        </figure>
+      </section>
+    </section>
+
+    <section title="Probing for Server State Loss">
+      <t>In between normal DNS traffic while the communication to the DNS
+      server is quiescent, the DNS client may want to probe the server to
+      ensure it has maintained cryptographic state. Such probes can also keep
+      alive firewall or NAT bindings. This probing reduces the frequency of
+      needing a new handshake when a DNS query needs to be resolved, improving
+      the user experience at the cost of bandwidth and processing time;
+      cellular devices could even send the probes while in power-save state
+      <xref target="I-D.isomaki-rtcweb-mobile"></xref>.</t>
+
+      <t>If the server has lost state, a DTLS (or TLS) handshake needs to be
+      initiated with the server.</t>
+
+      <section title="DTLS">
+        <t>A <xref target="RFC6520">DTLS heartbeat</xref> verifies the server
+        still has DTLS state by returning a DTLS message. If the server has
+        lost state, it returns a DTLS Alert.</t>
+      </section>
+
+      <section title="TLS">
+        <t>TLS runs over TCP, so a simple probe is a 0-length TCP packet (a
+        "window probe"). This verifies the TCP connection is still working,
+        which is also sufficient to prove the server has retained TLS state,
+        because if the server loses TLS state it abandons the TCP connection.
+        If the server has lost state, a TCP RST is returned immediately.</t>
+      </section>
+    </section>
+
+    <section title="NAT or Firewall Pinhole Closed">
+      <t>A NAT or Firewall, on the path between the DPRIVE client and DPRIVE
+      server, lose state -- either due to timing out the pinhole, exhausting
+      its resources (and needing to prematurely close the pinhole), or
+      crashing. This differs from the server losing state.</t>
+
+      <section title="DTLS">
+        <t>((to do. Basically, a new UDP pinhole is opened and nothing much
+        happens.))</t>
+      </section>
+
+      <section title="TLS">
+        <t>((to do. When the client sends its TCP packet, that packet will
+        (hopefully) cause a TCP RST from the NAT or firewall, which reduces to
+        a message flow identical to the message flows above.))</t>
+      </section>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>None.</t>
+    </section>
+
+    <!--
+   <section title="Acknowledgements">
+    </section>
+-->
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.I-D.ietf-dprive-dnsodtls"?>
+
+      <?rfc include="reference.I-D.ietf-dprive-start-tls-for-dns"?>
+
+      <?rfc include="reference.RFC.6347"?>
+
+      <?rfc include="reference.RFC.5246"?>
+
+      <?rfc include="reference.RFC.6066"?>
+    </references>
+
+    <references title="Informative References">
+      <?rfc include="reference.RFC.7413"?>
+
+      <?rfc include="reference.RFC.7250"?>
+
+      <?rfc include="reference.RFC.5077"?>
+
+      <?rfc include="reference.RFC.6520"?>
+
+      <?rfc include="reference.I-D.ietf-tls-falsestart"?>
+
+      <?rfc include="reference.I-D.ietf-tls-tls13"?>
+
+      <?rfc include="reference.I-D.isomaki-rtcweb-mobile"?>
+
+      <?rfc include="reference.I-D.ietf-tls-cached-info"?>
+
+      <reference anchor="RST-delay"
+                 target="https://www.nanog.org/meetings/nanog39/presentations/ipv6_katsuyasu.pdf">
+        <front>
+          <title>Clear and Present Danger of IPv6 episode 2: IPv6/IPv4
+          fallback</title>
+
+          <author>
+            <organization>NTT Labs</organization>
+          </author>
+
+          <date day="4" month="February" year="2007" />
+        </front>
+      </reference>
+    </references>
+  </back>
+</rfc>
