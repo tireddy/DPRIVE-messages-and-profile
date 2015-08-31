@@ -51,8 +51,8 @@
 
     <abstract>
       <t>This document defines a Transport Layer Security (TLS) and Datagram
-      TLS (DTLS) 1.2 profile for providing DNS privacy. The message flows for
-      DNS-over-TLS and DNS-over-DTLS are also discussed and compared.</t>
+      TLS (DTLS) 1.2 profile for providing DNS privacy. Message flows for
+      DNS-over-TLS and DNS-over-DTLS are discussed and compared.</t>
     </abstract>
   </front>
 
@@ -61,11 +61,11 @@
       <t>The DPRIVE working group has two active documents that provide DNS
       confidentiality, DNS over DTLS <xref
       target="I-D.ietf-dprive-dnsodtls"></xref> and DNS over TLS <xref
-      target="I-D.ietf-dprive-start-tls-for-dns"></xref>. </t>
+      target="I-D.ietf-dprive-start-tls-for-dns"></xref>.</t>
 
       <t>This document defines a profile of DTLS 1.2 <xref
-      target="RFC6347"></xref>and TLS 1.2 <xref target="RFC5246 "></xref> that
-      offers DNS privacy. Profile thereby means that available configuration
+      target="RFC6347"></xref> and TLS 1.2 <xref target="RFC5246"></xref> that
+      offers DNS privacy. Profile thereby means the available configuration
       options and protocol extensions are utilized to best support DNS
       privacy. This document also shows message flows for those two
       documents.</t>
@@ -86,19 +86,19 @@
           <t><xref target="I-D.ietf-tls-cached-info">Cached Information
           Extension</xref>, which avoids transmitting the server's certificate
           and certificate chain if the client has cached that information from
-          a previous TLS handshake, and;</t>
+          a previous TLS handshake, and;.</t>
 
           <t><xref target="RFC7250">Raw public keys</xref>, which reduce the
           size of the ServerHello, and don't have to pay the price of
-          certificates and public key infrastructure (PKI).</t>
+          certificates and public key infrastructure (PKI), and; </t>
 
-          <t><xref target="RFC6066"></xref> extension lowers the maximum
-          fragment length support needed for the Record Layer from 2^14 bytes
-          to 2^9 bytes. This extension allows the DNS client to indicate to
-          the DNS server how much the input that the record layer may process
-          without fragmentation (that is, the maximum value of
+          <t><xref target="RFC6066">TLS Extension Definitions </xref> lowers
+          the maximum fragment length support needed for the Record Layer from
+          2^14 bytes to 2^9 bytes. This extension allows the DNS client to
+          indicate to the DNS server how much the input that the record layer
+          may process without fragmentation (that is, the maximum value of
           TLSPlaintext.length; see <xref target="RFC5246"></xref>, Section
-          6.2.1). </t>
+          6.2.1), and;</t>
 
           <t>Profiled TLS 1.2 (but quickly move to support <xref
           target="I-D.ietf-tls-tls13">TLS 1.3</xref> which reduces round
@@ -163,7 +163,7 @@ client                                              server
       <section title="TLS">
         <t>With TLS, the client is immediately informed of server state loss
         with a TCP RST, as shown in the diagram below. This costs one round
-        trip.</t>
+        trip , and is unavoidable.</t>
 
         <figure anchor="fig_server_state_loss_tls"
                 title="Server State Loss, TLS">
@@ -187,8 +187,6 @@ client                                                    server
    |                                                         |
 ]]></artwork>
         </figure>
-
-        <t>Unlike DTLS, this round trip is unavoidable.</t>
 
         <t><list style="empty">
             <t>Open Issue: Does TCP RST cause one second delay on Windows, or
@@ -260,14 +258,67 @@ client                                                         server
       crashing. This differs from the server losing state.</t>
 
       <section title="DTLS">
-        <t>((to do. Basically, a new UDP pinhole is opened and nothing much
-        happens.))</t>
+        <figure anchor="fig_server_state_loss_dtls_firewall"
+                title="NAT/Firewall State Loss, DTLS">
+          <artwork align="center"><![CDATA[
+ client            NAT or firewall                server
+    |                     |                         |              
+    |<-----------DPRIVE communications------------->|
+    |                     |                         |
+    |                (state loss)                   |
+    |                     |                         |
+    |-----------DPRIVE query----------------------->|
+    |        (new state created in NAT/firewall)    |
+    |                     |                         |
+  . |<----------DPRIVE response---------------------|
+    |                   ...                         |
+]]></artwork>
+        </figure>
       </section>
 
       <section title="TLS">
-        <t>((to do. When the client sends its TCP packet, that packet will
-        (hopefully) cause a TCP RST from the NAT or firewall, which reduces to
-        a message flow identical to the message flows above.))</t>
+        <t>With a TCP connection when the NAT or firewall has lost state and
+        sees a TCP packet without the SYN bit set, there are several possible
+        reactions by the NAT or firewall: <list style="symbols">
+            <t>send TCP RST, spoofing the source IP address of the original
+            packet's destination address. This is shown in the following
+            figure.</t>
+
+            <t>create state. A firewall is unlikely to create state when it
+            sees an in-progress TCP packet, but some NATs may create state.
+            However, if the NAT creates state for a different source TCP port
+            than the previous connection, the server will reject the TCP
+            packet as shown above in <xref
+            target="fig_server_state_loss_tls_fastopen"></xref>. This message
+            flow is not shown.</t>
+          </list></t>
+
+        <figure anchor="fig_server_state_loss_tls_firewall"
+                title="NAT/Firewall State Loss, TLS">
+          <artwork align="center"><![CDATA[
+ client            NAT or firewall                server
+    |                     |                          |              
+    |<-----------DPRIVE communications-------------->|
+    |                     |                          |
+    |                (state loss)                    |
+    |                     |                          |
+    |----DPRIVE query---->X                          |
+    |        (no state exists for TCP flow)          |
+    |                     |                          |
+    |<---TCP RST----------|                          |
+    |                     |                          |
+  (client does normal     |                          |
+  TLS re-establishment)   |                          |
+    |                     |                          |
+    |--TCP SYN-------------------------------------->|
+    |<-TCP SYNACK------------------------------------|
+    |--TCP ACK, TLS ClientHello w/Resumption ------->|
+    |<-TLS ServerHello, ChangeCipherSpec, Finished --|
+    |--TLS ChangeCipherSpec, Finished, DNS query---->|
+    |<-DNS response----------------------------------|
+    |                     |                          |
+]]></artwork>
+        </figure>
       </section>
     </section>
 
