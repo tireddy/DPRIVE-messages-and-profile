@@ -90,7 +90,7 @@
 
           <t><xref target="RFC7250">Raw public keys</xref>, which reduce the
           size of the ServerHello, and don't have to pay the price of
-          certificates and public key infrastructure (PKI), and; </t>
+          certificates and public key infrastructure (PKI), and;</t>
 
           <t><xref target="RFC6066">TLS Extension Definitions </xref> lowers
           the maximum fragment length support needed for the Record Layer from
@@ -102,7 +102,15 @@
 
           <t>Profiled TLS 1.2 (but quickly move to support <xref
           target="I-D.ietf-tls-tls13">TLS 1.3</xref> which reduces round
-          trips).</t>
+          trips). The interaction between the DNS client and the DNS server
+          requires Transport Layer Security (TLS) and Datagram Transport Layer
+          Security (DTLS) with a ciphersuite offering confidentiality
+          protection and the guidance given in <xref target="RFC7525"></xref>
+          must be followed to avoid attacks on DTLS, and;</t>
+
+          <t>Authenticating the DNS server using certificates or Raw public
+          keys is discussed in Section 3.2 of <xref
+          target="I-D.ietf-dprive-dnsodtls"></xref>. </t>
         </list></t>
 
       <section title="DTLS">
@@ -343,6 +351,8 @@ client                                                         server
       <?rfc include="reference.RFC.5246"?>
 
       <?rfc include="reference.RFC.6066"?>
+
+      <?rfc include="reference.RFC.7525"?>
     </references>
 
     <references title="Informative References">
